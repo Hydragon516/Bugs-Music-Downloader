@@ -3,12 +3,14 @@ from PyQt5.QtWidgets import QLabel, QListWidget, QLineEdit, QDialog, QPushButton
 from bs4 import BeautifulSoup
 import requests
 import re
-import youtube_dl
+import yt_dlp
 import eyed3
 import os
 import shutil
 from selenium import webdriver
 from urllib import request
+import chromedriver_autoinstaller
+import webbrowser
 
 search_title = ""
 
@@ -17,6 +19,8 @@ class MyMainGUI(QDialog):
         super().__init__(parent)
 
         self.search_button = QPushButton("음악 검색")
+        self.github_button = QPushButton("Github")
+        
         self.search_input = QLineEdit(self)
         self.music_list = QListWidget(self)
 
@@ -25,10 +29,11 @@ class MyMainGUI(QDialog):
         self.youtube_button = QPushButton("음원 다운로드")
 
         hbox = QHBoxLayout()
-        hbox.addStretch(0)
+        hbox.addStretch(1)
         hbox.addWidget(self.search_input)
         hbox.addWidget(self.search_button)
-        hbox.addStretch(0)
+        hbox.addWidget(self.github_button)
+        hbox.addStretch(1)
 
         hbox2 = QHBoxLayout()
         hbox2.addWidget(self.music_list)
@@ -48,8 +53,8 @@ class MyMainGUI(QDialog):
 
         self.setLayout(vbox)
 
-        self.setWindowTitle('Bugs Downloader')
-        self.setGeometry(300, 300, 500, 200)
+        self.setWindowTitle('Bugs Downloader (v1.3)')
+        self.setGeometry(300, 300, 500, 350)
 
 
 class MyMain(MyMainGUI):
@@ -61,6 +66,7 @@ class MyMain(MyMainGUI):
 
         self.search_button.clicked.connect(self.search)
         self.youtube_button.clicked.connect(self.download)
+        self.github_button.clicked.connect(lambda: webbrowser.open('https://github.com/Hydragon516/Bugs-Music-Downloader'))
 
         self.search_input.textChanged[str].connect(self.title_update)
         self.music_list.itemClicked.connect(self.chkItemClicked)
@@ -121,16 +127,22 @@ class searcher(QThread):
         album_list = []
         
         if search_title != "":
-            self.updated_label.emit("서버에 접속하는 중...")
+            chrome_ver = chromedriver_autoinstaller.get_chrome_version().split('.')[0]
+            self.updated_label.emit("크롬 드라이버 버전 확인 완료! : {}".format(chrome_ver))
 
             options = webdriver.ChromeOptions()
             options.add_argument('--headless')
             options.add_argument("--disable-gpu")
             options.add_experimental_option('excludeSwitches', ['enable-logging'])
             options.add_argument('--log-level=3')
+            
+            try:
+                driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)   
+            except:
+                chromedriver_autoinstaller.install(True)
+                driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)
 
-            driver = webdriver.Chrome('chromedriver', options=options)
-            driver.implicitly_wait(5)
+            self.updated_label.emit("서버에 접속하는 중...")
 
             driver.get(url='https://music.bugs.co.kr/search/track?q=' + search_title)
 
@@ -190,6 +202,8 @@ class downloadr(QThread):
         global search_title
 
         self.updated_label.emit("음원 파일을 읽는 중 ...")
+
+        chrome_ver = chromedriver_autoinstaller.get_chrome_version().split('.')[0]
         
         target_index = keyword.split(" // ")[0]
         target_title = keyword.split(" // ")[1]
@@ -203,7 +217,7 @@ class downloadr(QThread):
         options.add_argument('--log-level=3')
 
 
-        driver = webdriver.Chrome('chromedriver', options=options)
+        driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)  
         driver.implicitly_wait(5)
 
         driver.get(url='https://music.bugs.co.kr/search/track?q=' + search_title)
@@ -258,7 +272,7 @@ class downloadr(QThread):
         options.add_argument('--window-size=1024,768')
         options.add_argument("--disable-gpu")
 
-        driver = webdriver.Chrome('./chromedriver.exe', options=options)
+        driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)  
         
         driver.get(url)
         soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -280,7 +294,7 @@ class downloadr(QThread):
 
         self.updated_label.emit("음원 다운로드 중 입니다...")
 
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url_list[0]])
 
         self.updated_label.emit("파일 변환 중 입니다...")
@@ -309,7 +323,6 @@ class downloadr(QThread):
         shutil.move(new_name, "./변환된 파일/" + new_name)
 
         self.updated_label.emit("변환 완료!")
-
 
 
 if __name__ == "__main__":
