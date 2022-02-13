@@ -8,6 +8,7 @@ import eyed3
 import os
 import shutil
 from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
 from urllib import request
 import chromedriver_autoinstaller
 import webbrowser
@@ -275,13 +276,18 @@ class downloadr(QThread):
         driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)  
         
         driver.get(url)
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        for item in range(50):
+            page = driver.find_element_by_tag_name('html')
+            page.send_keys(Keys.END)
+
+        content = driver.page_source.encode('utf-8').strip()
+        soup = BeautifulSoup(content, 'html.parser')
+
+        for link in soup.findAll('a', id='video-title'):
+            url_list.append('https://www.youtube.com' + link.get('href'))
+
         driver.close()
-
-        video_url = soup.select('a#video-title')
-
-        for i in video_url:
-            url_list.append('{}{}'.format('https://www.youtube.com',i.get('href')))
         
         ydl_opts = {
             'format': 'bestaudio/best',
