@@ -9,8 +9,10 @@ import os
 import shutil
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
 from urllib import request
-import chromedriver_autoinstaller
+from webdriver_manager.chrome import ChromeDriverManager
 import webbrowser
 
 search_title = ""
@@ -54,7 +56,7 @@ class MyMainGUI(QDialog):
 
         self.setLayout(vbox)
 
-        self.setWindowTitle('Bugs Downloader (v1.3)')
+        self.setWindowTitle('Bugs Downloader (v1.5)')
         self.setGeometry(300, 300, 500, 350)
 
 
@@ -128,20 +130,13 @@ class searcher(QThread):
         album_list = []
         
         if search_title != "":
-            chrome_ver = chromedriver_autoinstaller.get_chrome_version().split('.')[0]
-            self.updated_label.emit("크롬 드라이버 버전 확인 완료! : {}".format(chrome_ver))
-
             options = webdriver.ChromeOptions()
             options.add_argument('--headless')
             options.add_argument("--disable-gpu")
             options.add_experimental_option('excludeSwitches', ['enable-logging'])
             options.add_argument('--log-level=3')
             
-            try:
-                driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)   
-            except:
-                chromedriver_autoinstaller.install(True)
-                driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
             self.updated_label.emit("서버에 접속하는 중...")
 
@@ -151,7 +146,7 @@ class searcher(QThread):
 
             for indx in range(30):
                 try:
-                    target = driver.find_element_by_xpath('//*[@id="DEFAULT0"]/table/tbody/tr[{}]/th/p/a'.format(indx + 1))
+                    target = driver.find_element(By.XPATH, '//*[@id="DEFAULT0"]/table/tbody/tr[{}]/th/p/a'.format(indx + 1))
                     title_list.append(target.get_attribute("title"))
                 except:
                     break
@@ -160,7 +155,7 @@ class searcher(QThread):
             
             for indx in range(30):
                 try:
-                    target = driver.find_element_by_xpath('//*[@id="DEFAULT0"]/table/tbody/tr[{}]/td[4]/p/a'.format(indx + 1))
+                    target = driver.find_element(By.XPATH,'//*[@id="DEFAULT0"]/table/tbody/tr[{}]/td[4]/p/a'.format(indx + 1))
                     artist_list.append(target.get_attribute("title"))
                 except:
                     break
@@ -169,7 +164,7 @@ class searcher(QThread):
             
             for indx in range(30):
                 try:
-                    target = driver.find_element_by_xpath('//*[@id="DEFAULT0"]/table/tbody/tr[{}]/td[5]/a'.format(indx + 1))
+                    target = driver.find_element(By.XPATH,'//*[@id="DEFAULT0"]/table/tbody/tr[{}]/td[5]/a'.format(indx + 1))
                     album_list.append(target.get_attribute("title"))
                 except:
                     break
@@ -203,8 +198,6 @@ class downloadr(QThread):
         global search_title
 
         self.updated_label.emit("음원 파일을 읽는 중 ...")
-
-        chrome_ver = chromedriver_autoinstaller.get_chrome_version().split('.')[0]
         
         target_index = keyword.split(" // ")[0]
         target_title = keyword.split(" // ")[1]
@@ -217,24 +210,21 @@ class downloadr(QThread):
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         options.add_argument('--log-level=3')
 
-
-        driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)  
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
         driver.implicitly_wait(5)
 
         driver.get(url='https://music.bugs.co.kr/search/track?q=' + search_title)
-        target_music_button = driver.find_element_by_xpath('//*[@id="DEFAULT0"]/table/tbody/tr[{}]/td[3]/a'.format(target_index))
+        target_music_button = driver.find_element(By.XPATH,'//*[@id="DEFAULT0"]/table/tbody/tr[{}]/td[3]/a'.format(target_index))
         target_music_button.click()
         
         lyrics_url = driver.current_url
 
         driver.close()
 
+        self.updated_label.emit("가사 가져오는 중 ...")
+        
         html = requests.get(lyrics_url)
         soup = BeautifulSoup(html.text, 'html.parser')
-
-        cover = soup.find_all('div', {'class':'photos'})
-        cover_link = re.search('src="(.*)"/>', str(cover)).group(1)
-        request.urlretrieve(cover_link, "cover.jpg")
 
         lyric = soup.find_all('div', {'class':'lyricsContainer'})
         lines = str(lyric).split("\n")
@@ -255,15 +245,40 @@ class downloadr(QThread):
                 lyrics.append(item.replace("</xmp></p>", ""))
                 break
 
-        with open("lyric.txt", 'w') as f:
+        with open("lyric.txt", 'w', encoding='utf-8') as f:
             for row in lyrics:
                 f.write(row)
 
         f.close()
 
+        self.updated_label.emit("앨범 커버 가져오는 중 ...")
+
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        driver.implicitly_wait(5)
+
+        driver.get(lyrics_url)
+        target_cover_button = driver.find_element(By.XPATH,'//*[@id="container"]/section[1]/div/div[1]/div/ul/li/a/span')
+        target_cover_button.click()
+        driver.implicitly_wait(5)
+        target_cover_button = driver.find_element(By.XPATH,'//*[@id="container"]/section[1]/div/div[1]/div/ul/li/a/span')
+        target_cover_button.click()
+        driver.implicitly_wait(5)
+        target_cover_button = driver.find_element(By.XPATH,'//*[@id="originalPhotoViewBtn"]/img')
+        target_cover_button.click()
+        driver.implicitly_wait(5)
+
+        # cover = soup.find_all('div', {'class':'photos'})
+        cover_link = driver.current_url
+        cover_num = (cover_link.split("album/")[1]).split("?")[0]
+        new_cover_link = "https://image.bugsm.co.kr/album/images/original/{}/{}.jpg".format(cover_num[0:-2], cover_num)
+        driver.close()
+
+        request.urlretrieve(new_cover_link, "cover.jpg")
+
         surch_keyword = target_title + " " + target_artist + " 음원"
 
         new_name = target_title + "_" + target_artist + ".mp3"
+        new_name = new_name.replace("/", "_")
 
         url_list = []
         url = 'https://www.youtube.com/results?search_query={}'.format(surch_keyword)
@@ -273,12 +288,12 @@ class downloadr(QThread):
         options.add_argument('--window-size=1024,768')
         options.add_argument("--disable-gpu")
 
-        driver = webdriver.Chrome(f'./{chrome_ver}/chromedriver.exe', options=options)  
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
         
         driver.get(url)
 
         for item in range(50):
-            page = driver.find_element_by_tag_name('html')
+            page = driver.find_element(By.TAG_NAME, 'html')
             page.send_keys(Keys.END)
 
         content = driver.page_source.encode('utf-8').strip()
@@ -288,7 +303,7 @@ class downloadr(QThread):
             url_list.append('https://www.youtube.com' + link.get('href'))
 
         driver.close()
-        
+
         ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -296,6 +311,7 @@ class downloadr(QThread):
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
+            'outtmpl': './{}'.format(new_name)
         }
 
         self.updated_label.emit("음원 다운로드 중 입니다...")
@@ -304,14 +320,8 @@ class downloadr(QThread):
             ydl.download([url_list[0]])
 
         self.updated_label.emit("파일 변환 중 입니다...")
-
-        files = os.listdir("./")
-
-        for file in files:
-            if ".mp3" in file:
-                os.rename(file, new_name)
         
-        OpenLyircsFile = open("lyric.txt", 'r') 
+        OpenLyircsFile = open("lyric.txt", 'r', encoding='UTF8') 
         ReadLyirsFile = OpenLyircsFile.read() 
 
         audiofile = eyed3.load("./" + new_name)
