@@ -2,7 +2,6 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, QThread
 from PyQt5.QtWidgets import QLabel, QListWidget, QLineEdit, QDialog, QPushButton, QHBoxLayout, QVBoxLayout, QApplication
 from bs4 import BeautifulSoup
 import requests
-import re
 import yt_dlp
 import eyed3
 import os
@@ -56,7 +55,7 @@ class MyMainGUI(QDialog):
 
         self.setLayout(vbox)
 
-        self.setWindowTitle('Bugs Downloader (v1.5)')
+        self.setWindowTitle('Bugs Downloader (v1.6)')
         self.setGeometry(300, 300, 500, 350)
 
 
@@ -267,7 +266,6 @@ class downloadr(QThread):
         target_cover_button.click()
         driver.implicitly_wait(5)
 
-        # cover = soup.find_all('div', {'class':'photos'})
         cover_link = driver.current_url
         cover_num = (cover_link.split("album/")[1]).split("?")[0]
         new_cover_link = "https://image.bugsm.co.kr/album/images/original/{}/{}.jpg".format(cover_num[0:-2], cover_num)
@@ -277,7 +275,7 @@ class downloadr(QThread):
 
         surch_keyword = target_title + " " + target_artist + " 음원"
 
-        new_name = target_title + "_" + target_artist + ".mp3"
+        new_name = target_title + "_" + target_artist
         new_name = new_name.replace("/", "_")
 
         url_list = []
@@ -324,7 +322,7 @@ class downloadr(QThread):
         OpenLyircsFile = open("lyric.txt", 'r', encoding='UTF8') 
         ReadLyirsFile = OpenLyircsFile.read() 
 
-        audiofile = eyed3.load("./" + new_name)
+        audiofile = eyed3.load("./" + new_name + ".mp3")
         audiofile.initTag()
         audiofile.tag.artist = target_artist
         audiofile.tag.title = target_title
@@ -336,7 +334,7 @@ class downloadr(QThread):
         if not os.path.exists("./변환된 파일"):
             os.makedirs("./변환된 파일")
 
-        shutil.move(new_name, "./변환된 파일/" + new_name)
+        shutil.move(new_name + ".mp3", "./변환된 파일/" + new_name + ".mp3")
 
         self.updated_label.emit("변환 완료!")
 
