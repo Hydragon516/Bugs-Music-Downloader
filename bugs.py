@@ -15,6 +15,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 import webbrowser
 
 search_title = ""
+music_source = ""
 
 class MyMainGUI(QDialog):
     def __init__(self, parent=None):
@@ -24,6 +25,11 @@ class MyMainGUI(QDialog):
         self.github_button = QPushButton("Github")
         
         self.search_input = QLineEdit(self)
+        self.search_input.setPlaceholderText("검색어를 입력하세요.")
+
+        self.music_source = QLineEdit(self)
+        self.music_source.setPlaceholderText("유튜브 링크를 입력하세요. (옵션)")
+
         self.music_list = QListWidget(self)
 
         self.status_label = QLabel("", self)
@@ -38,10 +44,13 @@ class MyMainGUI(QDialog):
         hbox.addStretch(1)
 
         hbox2 = QHBoxLayout()
-        hbox2.addWidget(self.music_list)
+        hbox2.addWidget(self.music_source)
 
         hbox3 = QHBoxLayout()
-        hbox3.addWidget(self.youtube_button)
+        hbox3.addWidget(self.music_list)
+
+        hbox4 = QHBoxLayout()
+        hbox4.addWidget(self.youtube_button)
 
         vbox = QVBoxLayout()
         vbox.addStretch(1)
@@ -51,11 +60,13 @@ class MyMainGUI(QDialog):
         vbox.addStretch(1)
         vbox.addLayout(hbox3)
         vbox.addStretch(1)
+        vbox.addLayout(hbox4)
+        vbox.addStretch(1)
         vbox.addWidget(self.status_label)
 
         self.setLayout(vbox)
 
-        self.setWindowTitle('Bugs Downloader (v1.6)')
+        self.setWindowTitle('Bugs Downloader (v1.7)')
         self.setGeometry(300, 300, 500, 350)
 
 
@@ -72,6 +83,7 @@ class MyMain(MyMainGUI):
 
         self.search_input.textChanged[str].connect(self.title_update)
         self.music_list.itemClicked.connect(self.chkItemClicked)
+        self.music_source.textChanged[str].connect(self.source_update)
 
         self.th_search = searcher(parent=self)
         self.th_search.updated_list.connect(self.list_update)
@@ -85,6 +97,10 @@ class MyMain(MyMainGUI):
     def title_update(self, input):
         global search_title
         search_title = input
+
+    def source_update(self, input):
+        global music_source
+        music_source = input
     
     def chkItemClicked(self) :
         global keyword
@@ -122,6 +138,7 @@ class searcher(QThread):
     def run(self):
 
         global search_title
+        global music_source
         global keyword
 
         title_list = []
@@ -195,8 +212,14 @@ class downloadr(QThread):
     def run(self):
         global keyword
         global search_title
+        global music_source
 
-        self.updated_label.emit("음원 파일을 읽는 중 ...")
+        if music_source != "":
+            if "www.youtube.com" not in music_source:
+                self.updated_label.emit("정확한 유튜브 링크를 입력하세요")
+                return
+
+        self.updated_label.emit("Bugs에서 메타 정보를 다운로드하는 중...")
         
         target_index = keyword.split(" // ")[0]
         target_title = keyword.split(" // ")[1]
@@ -273,34 +296,41 @@ class downloadr(QThread):
 
         request.urlretrieve(new_cover_link, "cover.jpg")
 
-        surch_keyword = target_title + " " + target_artist + " 음원"
-
+        url_list = []
         new_name = target_title + "_" + target_artist
         new_name = new_name.replace("/", "_")
 
-        url_list = []
-        url = 'https://www.youtube.com/results?search_query={}'.format(surch_keyword)
+        if music_source == "":
+            self.updated_label.emit("자동 모드로 음원 파일을 검색하는 중 ...")
 
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
-        options.add_argument('--window-size=1024,768')
-        options.add_argument("--disable-gpu")
+            surch_keyword = target_title + " " + target_artist + " 음원"
 
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-        
-        driver.get(url)
+            url = 'https://www.youtube.com/results?search_query={}'.format(surch_keyword)
 
-        for item in range(50):
-            page = driver.find_element(By.TAG_NAME, 'html')
-            page.send_keys(Keys.END)
+            options = webdriver.ChromeOptions()
+            options.add_argument('--headless')
+            options.add_argument('--window-size=1024,768')
+            options.add_argument("--disable-gpu")
 
-        content = driver.page_source.encode('utf-8').strip()
-        soup = BeautifulSoup(content, 'html.parser')
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            
+            driver.get(url)
 
-        for link in soup.findAll('a', id='video-title'):
-            url_list.append('https://www.youtube.com' + link.get('href'))
+            for item in range(50):
+                page = driver.find_element(By.TAG_NAME, 'html')
+                page.send_keys(Keys.END)
 
-        driver.close()
+            content = driver.page_source.encode('utf-8').strip()
+            soup = BeautifulSoup(content, 'html.parser')
+
+            for link in soup.findAll('a', id='video-title'):
+                url_list.append('https://www.youtube.com' + link.get('href'))
+
+            driver.close()
+
+        else:
+            self.updated_label.emit("수동 모드로 음원 파일을 검색하는 중 ...")
+            url_list.append(music_source)
 
         ydl_opts = {
             'format': 'bestaudio/best',
